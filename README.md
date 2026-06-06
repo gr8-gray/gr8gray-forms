@@ -10,7 +10,7 @@ gr8gray.dev /#contact  → POST JSON  → this Worker
                        1. Verify Turnstile token
                        2. Validate schema (6 known fields)
                        3. Write submission to KV (audit log)
-                       4. Send email to Eric via Resend
+                       4. Send email to Eric via Brevo
                        5. Return { ok: true }
 ```
 
@@ -26,7 +26,7 @@ npx wrangler kv namespace create FORM_LOG
 # → paste returned id into wrangler.toml
 
 # Set secrets
-npx wrangler secret put RESEND_API_KEY
+npx wrangler secret put BREVO_API_KEY
 npx wrangler secret put TURNSTILE_SECRET_KEY
 npx wrangler secret put NOTIFY_TO
 npx wrangler secret put NOTIFY_FROM
@@ -37,10 +37,10 @@ npm run deploy
 
 After deploy, the Worker will live at `gr8gray-forms.<your-subdomain>.workers.dev`. Add a custom route `forms.gr8gray.dev/teaser` to it in the Cloudflare dashboard.
 
-## Resend setup
+## Brevo setup
 
-1. Add `gr8gray.dev` as a domain in Resend
-2. Add the DKIM/SPF/DMARC DNS records they provide to Cloudflare DNS
+1. Add `gr8gray.dev` as a domain in Brevo (Senders & IP -> Domains)
+2. Add the DKIM/verification/DMARC DNS records they provide to Cloudflare DNS
 3. Use `forms@gr8gray.dev` (or similar) as `NOTIFY_FROM`
 4. Use any address as `NOTIFY_TO`
 
