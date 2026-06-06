@@ -7,7 +7,7 @@ compatibility_date = "2026-05-01"
 # Paste the returned id below.
 [[kv_namespaces]]
 binding = "FORM_LOG"
-id = "REPLACE_WITH_KV_ID"
+id = "bd6e1c49ae0b43b2b48e98372c121ee4"
 
 # Secrets (set via `npx wrangler secret put <name>`):
 #   BREVO_API_KEY         Brevo API key (xkeysib-...)
