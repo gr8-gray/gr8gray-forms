@@ -1,0 +1,16 @@
+name = "gr8gray-forms"
+main = "src/index.ts"
+compatibility_date = "2026-05-01"
+
+# Bind the audit-log KV namespace before deploy:
+#   npx wrangler kv namespace create FORM_LOG
+# Paste the returned id below.
+[[kv_namespaces]]
+binding = "FORM_LOG"
+id = "REPLACE_WITH_KV_ID"
+
+# Secrets (set via `npx wrangler secret put <name>`):
+#   RESEND_API_KEY        Resend API key (re_...)
+#   TURNSTILE_SECRET_KEY  Cloudflare Turnstile server-side key
+#   NOTIFY_TO             email address to forward submissions to
+#   NOTIFY_FROM           sender address (must be on verified Resend domain)
