@@ -2,14 +2,14 @@
  * gr8gray-forms — Cloudflare Worker
  *
  * Receives teaser-form submissions from gr8gray.dev, validates them
- * (Turnstile + schema), writes an audit log to KV, and emails Eric via Resend.
+ * (Turnstile + schema), writes an audit log to KV, and emails Eric via Brevo.
  *
  * Phase A scope only — no Claude API integration, no SOW generation.
  */
 
 export interface Env {
   FORM_LOG: KVNamespace;
-  RESEND_API_KEY: string;
+  BREVO_API_KEY: string;
   TURNSTILE_SECRET_KEY: string;
   NOTIFY_TO: string;
   NOTIFY_FROM: string;
@@ -131,23 +131,27 @@ async function sendEmail(
   ];
   const text = lines.join("\n");
 
-  const r = await fetch("https://api.resend.com/emails", {
+  const r = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${env.RESEND_API_KEY}`,
-      "Content-Type": "application/json",
+      "api-key": env.BREVO_API_KEY,
+      accept: "application/json",
+      "content-type": "application/json",
     },
     body: JSON.stringify({
-      from: env.NOTIFY_FROM,
-      to: env.NOTIFY_TO,
+      sender: { email: env.NOTIFY_FROM, name: "gr8gray.dev" },
+      to: [{ email: env.NOTIFY_TO }],
       subject: `[gr8gray.dev] ${submission.one_liner.slice(0, 60)}`,
-      text,
+      htmlContent: `<pre>${text.replace(/[&<>]/g, (c) =>
+        c === "&" ? "&amp;" : c === "<" ? "&lt;" : "&gt;",
+      )}</pre>`,
+      textContent: text,
     }),
   });
 
-  if (!r.ok) {
+  if (r.status !== 201) {
     const body = await r.text();
-    throw new Error(`Resend ${r.status}: ${body}`);
+    throw new Error(`Brevo ${r.status}: ${body}`);
   }
 }
 
