@@ -2,6 +2,15 @@ name = "gr8gray-forms"
 main = "src/index.ts"
 compatibility_date = "2026-05-01"
 
+# Custom domain the site's contact form posts to (see gr8gray-site Contact.astro —
+# PUBLIC_FORMS_ORIGIN defaults to this host). custom_domain = true makes the deploy
+# create the DNS record + cert in the gr8gray.dev zone automatically. Without this
+# block the Worker only existed at workers.dev and every production form submission
+# NXDOMAIN'd — the lead funnel was silently down until 2026-07-28.
+routes = [
+  { pattern = "forms.gr8gray.dev", custom_domain = true }
+]
+
 # Bind the audit-log KV namespace before deploy:
 #   npx wrangler kv namespace create FORM_LOG
 # Paste the returned id below.
