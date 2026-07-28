@@ -35,7 +35,7 @@ npx wrangler secret put NOTIFY_FROM
 npm run deploy
 ```
 
-After deploy, the Worker will live at `gr8gray-forms.<your-subdomain>.workers.dev`. Add a custom route `forms.gr8gray.dev/teaser` to it in the Cloudflare dashboard.
+Deploy attaches the custom domain automatically — `wrangler.toml` carries a `routes` block with `pattern = "forms.gr8gray.dev", custom_domain = true`, which creates the DNS record and cert in the `gr8gray.dev` zone. No dashboard step needed. (Live since 2026-07-28; the Worker also remains reachable at `gr8gray-forms.<your-subdomain>.workers.dev`.)
 
 ## Brevo setup
 
@@ -51,6 +51,9 @@ After deploy, the Worker will live at `gr8gray-forms.<your-subdomain>.workers.de
 3. Set the **secret key** via `wrangler secret put TURNSTILE_SECRET_KEY`
 
 ## Schema
+
+Single-sourced in `src/contract.ts` (`TEASER_CONTRACT`) — the site mirrors it in
+`gr8gray-site/src/lib/teaserContract.ts`; the two change in lockstep. Reference copy:
 
 ```ts
 {

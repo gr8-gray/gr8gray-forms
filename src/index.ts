@@ -5,7 +5,19 @@
  * (Turnstile + schema), writes an audit log to KV, and emails Eric via Brevo.
  *
  * Phase A scope only — no Claude API integration, no SOW generation.
+ *
+ * The request/response contract (field names, max lengths, enums, statuses)
+ * is single-sourced in src/contract.ts — the cross-repo lockstep half of
+ * gr8gray-site's src/lib/teaserContract.ts. Read its header before editing.
  */
+
+import {
+  BudgetValue,
+  CANONICAL_SITE_ORIGIN,
+  DeadlineValue,
+  ORIGIN_ALLOWLIST,
+  TEASER_CONTRACT,
+} from "./contract";
 
 export interface Env {
   FORM_LOG: KVNamespace;
@@ -15,21 +27,7 @@ export interface Env {
   NOTIFY_FROM: string;
 }
 
-const DEADLINE_VALUES = ["hard", "soft", "flexible"] as const;
-const BUDGET_VALUES = [
-  "lt2k",
-  "2to5k",
-  "5to10k",
-  "10to25k",
-  "gt25k",
-  "unsure",
-] as const;
-
-const ORIGIN_ALLOWLIST = new Set([
-  "https://gr8gray.dev",
-  "https://www.gr8gray.dev",
-  "http://localhost:4321",
-]);
+const STATUS = TEASER_CONTRACT.status;
 
 type FieldError = { field: string; reason: string };
 
@@ -37,13 +35,17 @@ type TeaserSubmission = {
   name_email: string;
   one_liner: string;
   success_metric: string;
-  deadline: (typeof DEADLINE_VALUES)[number];
-  budget: (typeof BUDGET_VALUES)[number];
+  deadline: DeadlineValue;
+  budget: BudgetValue;
   examples: string;
 };
 
+const ALLOWED_ORIGINS: ReadonlySet<string> = new Set(ORIGIN_ALLOWLIST);
+
 function corsHeaders(origin: string | null): Record<string, string> {
-  const allowed = origin && ORIGIN_ALLOWLIST.has(origin) ? origin : "https://gr8gray.dev";
+  // Unknown/missing Origin still gets a valid header (the canonical site) so
+  // the response is never CORS-malformed; the browser enforces the mismatch.
+  const allowed = origin && ALLOWED_ORIGINS.has(origin) ? origin : CANONICAL_SITE_ORIGIN;
   return {
     "Access-Control-Allow-Origin": allowed,
     "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -82,12 +84,12 @@ function validate(payload: Record<string, unknown>): {
   }
 
   const data: TeaserSubmission = {
-    name_email: strField("name_email", 200),
-    one_liner: strField("one_liner", 500),
-    success_metric: strField("success_metric", 500),
-    deadline: enumField("deadline", DEADLINE_VALUES),
-    budget: enumField("budget", BUDGET_VALUES),
-    examples: strField("examples", 1000),
+    name_email: strField("name_email", TEASER_CONTRACT.fieldMax.name_email),
+    one_liner: strField("one_liner", TEASER_CONTRACT.fieldMax.one_liner),
+    success_metric: strField("success_metric", TEASER_CONTRACT.fieldMax.success_metric),
+    deadline: enumField("deadline", TEASER_CONTRACT.enums.deadline),
+    budget: enumField("budget", TEASER_CONTRACT.enums.budget),
+    examples: strField("examples", TEASER_CONTRACT.fieldMax.examples),
   };
 
   if (errors.length > 0) return { ok: false, errors };
@@ -161,12 +163,12 @@ export default {
     const cors = corsHeaders(origin);
 
     if (request.method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: cors });
+      return new Response(null, { status: STATUS.preflight, headers: cors });
     }
 
     const url = new URL(request.url);
-    if (url.pathname !== "/teaser" || request.method !== "POST") {
-      return new Response("not found", { status: 404, headers: cors });
+    if (url.pathname !== TEASER_CONTRACT.path || request.method !== "POST") {
+      return new Response("not found", { status: STATUS.notFound, headers: cors });
     }
 
     let payload: Record<string, unknown>;
@@ -175,12 +177,12 @@ export default {
     } catch {
       return Response.json(
         { ok: false, error: "invalid json" },
-        { status: 400, headers: cors },
+        { status: STATUS.badRequest, headers: cors },
       );
     }
 
     const token =
-      (payload["cf-turnstile-response"] as string | undefined) ?? "";
+      (payload[TEASER_CONTRACT.turnstileTokenField] as string | undefined) ?? "";
     const remoteip = request.headers.get("CF-Connecting-IP");
 
     const turnstileOk = await verifyTurnstile(
@@ -191,7 +193,7 @@ export default {
     if (!turnstileOk) {
       return Response.json(
         { ok: false, error: "turnstile failed" },
-        { status: 403, headers: cors },
+        { status: STATUS.turnstileRejected, headers: cors },
       );
     }
 
@@ -199,7 +201,7 @@ export default {
     if (!validation.ok) {
       return Response.json(
         { ok: false, errors: validation.errors },
-        { status: 400, headers: cors },
+        { status: STATUS.badRequest, headers: cors },
       );
     }
 
@@ -214,7 +216,8 @@ export default {
       submission: validation.data,
     };
 
-    // KV write is best-effort — don't fail the request if it's slow.
+    // KV write happens BEFORE the email so the lead survives a Brevo outage.
+    // 1-year TTL (documented in CLAUDE.md "Where submissions go" — keep in sync).
     await env.FORM_LOG.put(id, JSON.stringify(auditEntry), {
       expirationTtl: 60 * 60 * 24 * 365, // 1 year
     });
@@ -230,10 +233,10 @@ export default {
       console.error("email send failed", err);
       return Response.json(
         { ok: true, warning: "submission saved but email delivery failed; will retry" },
-        { status: 202, headers: cors },
+        { status: STATUS.savedButEmailFailed, headers: cors },
       );
     }
 
-    return Response.json({ ok: true, id }, { status: 200, headers: cors });
+    return Response.json({ ok: true, id }, { status: STATUS.ok, headers: cors });
   },
 } satisfies ExportedHandler<Env>;
