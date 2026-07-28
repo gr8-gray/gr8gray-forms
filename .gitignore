@@ -4,3 +4,7 @@ dist
 .dev.vars
 .env
 .DS_Store
+
+# Playwright artifacts
+test-results
+playwright-report
