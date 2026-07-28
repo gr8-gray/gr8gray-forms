@@ -2,14 +2,15 @@ name = "gr8gray-forms"
 main = "src/index.ts"
 compatibility_date = "2026-05-01"
 
-# Custom domain the site's contact form posts to (see gr8gray-site Contact.astro —
-# PUBLIC_FORMS_ORIGIN defaults to this host). custom_domain = true makes the deploy
-# create the DNS record + cert in the gr8gray.dev zone automatically. Without this
-# block the Worker only existed at workers.dev and every production form submission
-# NXDOMAIN'd — the lead funnel was silently down until 2026-07-28.
-routes = [
-  { pattern = "forms.gr8gray.dev", custom_domain = true }
-]
+# forms.gr8gray.dev custom domain: ATTACHED 2026-07-28 via a one-time routes block
+# ({ pattern = "forms.gr8gray.dev", custom_domain = true }) — the attachment is
+# persistent Cloudflare account state. The block was then REMOVED because on
+# re-deploys wrangler reconciles existing domains via the zone-routes API, and the
+# CI token (CLOUDFLARE_API_TOKEN secret) lacks zone scope → Authentication error
+# 10000, blocking every deploy after the first. If the domain ever detaches:
+# re-add the block and run one deploy with a zone-scoped token, then remove again
+# (or permanently upgrade the CI token with Zone > Workers Routes for gr8gray.dev
+# and keep the block — the config-as-code ideal).
 
 # Bind the audit-log KV namespace before deploy:
 #   npx wrangler kv namespace create FORM_LOG
