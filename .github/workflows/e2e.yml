@@ -1,0 +1,21 @@
+name: E2E worker contract
+# Side-effect-free checks against the live worker (CORS, routing, Turnstile
+# guard). Weekly because the worker only changes on deploy but its platform
+# dependencies (Turnstile siteverify, CF routing) can shift underneath it.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 14 * * 1'
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: 'npm' }
+      - run: npm ci
+      # API-request tests only — no browser install needed.
+      - name: Run contract tests against production
+        run: npx playwright test
+        env:
+          FORMS_BASE_URL: https://forms.gr8gray.dev
