@@ -7,9 +7,14 @@ log it, email Eric. Live at **https://forms.gr8gray.dev**.
 ## Tour
 
 ```
-src/index.ts       The whole worker: CORS, Turnstile verify, schema validation,
-                   KV audit write, Brevo email. ~240 lines, read it top to bottom.
-wrangler.toml      Worker name, KV binding (FORM_LOG), secret names documented in comments
+src/contract.ts    SINGLE SOURCE for the request/response contract: field names,
+                   max lengths, enums, statuses, CORS allowlist. The worker half of
+                   the cross-repo lockstep with gr8gray-site/src/lib/teaserContract.ts.
+src/index.ts       The worker: CORS, Turnstile verify, schema validation,
+                   KV audit write, Brevo email. Reads all contract values from
+                   src/contract.ts — no literals. Read it top to bottom.
+wrangler.toml      Worker name, custom-domain route, KV binding (FORM_LOG),
+                   secret names documented in comments
 .github/workflows/deploy.yml   push to main → tsc --noEmit → wrangler deploy
 e2e/               Safe live-contract specs (see "Testing safely")
 ```
@@ -17,6 +22,9 @@ e2e/               Safe live-contract specs (see "Testing safely")
 ## Request contract
 
 Only `POST /teaser` exists (plus its `OPTIONS` preflight). Everything else is 404.
+Everything in this section is defined once in `src/contract.ts` (`TEASER_CONTRACT`)
+and read from there by `validate()` — the tables below are documentation, the
+code is the source.
 
 **Request:** JSON body with:
 
@@ -45,9 +53,10 @@ Only `POST /teaser` exists (plus its `OPTIONS` preflight). Everything else is 40
 side effect. A request with a bad token produces **no KV write and no email** —
 that fact is what makes safe live testing possible (see below).
 
-CORS allowlist (in `src/index.ts`): `https://gr8gray.dev`, `https://www.gr8gray.dev`,
-`http://localhost:4321`. New site origins must be added here or the browser
-blocks the form — this is the classic cross-repo trap with gr8gray-site.
+CORS allowlist (`ORIGIN_ALLOWLIST` in `src/contract.ts`): `https://gr8gray.dev`,
+`https://www.gr8gray.dev`, `http://localhost:4321`. New site origins must be added
+here or the browser blocks the form — this is the classic cross-repo trap with
+gr8gray-site (it cannot be single-sourced across repos; both CLAUDE.mds flag it).
 
 ## Where submissions go
 
@@ -92,17 +101,18 @@ secret `1x0000000000000000000000000000000AA`) which always passes.
 
 ## Known traps
 
-- **`forms.gr8gray.dev` has no DNS record as of 2026-07-27** (NXDOMAIN from
-  1.1.1.1) — but the live site's form posts there, so every real submission
-  currently dies with a network error. The worker IS deployed and healthy at
-  `https://gr8gray-forms.ericgray928.workers.dev` (contract suite passes
-  against it). Fix: attach the custom domain to the worker (dashboard →
-  Worker → Settings → Domains & Routes, or add `routes` to wrangler.toml and
-  redeploy). The E2E suite defaults to the custom domain on purpose — it stays
-  red until the customer-facing endpoint actually works.
+- **`forms.gr8gray.dev` is LIVE as of 2026-07-28** — the custom domain is
+  attached via the `routes` block in wrangler.toml (`custom_domain = true`),
+  and the E2E suite runs green against it in CI. History: the domain had no
+  DNS record until 2026-07-28, so every production submission NXDOMAIN'd while
+  the worker sat healthy at `https://gr8gray-forms.ericgray928.workers.dev`.
+  If the route block ever disappears from wrangler.toml, that failure mode
+  comes back silently.
 - "Phase A scope only" (header comment): no Claude API / SOW generation yet —
   don't assume hooks for it exist.
 - Brevo success is status **201**; anything else throws and downgrades the
   response to 202 (lead is safe in KV).
-- Field names/enums are duplicated in gr8gray-site's `Contact.astro`.
-  Change them in lockstep or production submissions start failing 400.
+- Field names/enums are mirrored in gr8gray-site: `src/lib/teaserContract.ts`
+  (consumed by `Contact.astro` and its e2e suite). This repo's half is
+  `src/contract.ts`. The repos cannot import each other — change both in
+  lockstep or production submissions start failing 400.
